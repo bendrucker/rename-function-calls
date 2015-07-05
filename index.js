@@ -1,10 +1,11 @@
 'use strict';
 
 var detective = require('detective')
+  , patch = require('patch-text')
   , esprimaOpts = { tolerant: true, range: true };
 
 function rangeComparator(a, b) {
-  return a.from > b.from ? 1 : -1;
+  return a.start > b.end ? 1 : -1;
 }
 
 function getReplacements(fromName, toName, src) {
@@ -14,7 +15,7 @@ function getReplacements(fromName, toName, src) {
   return res.nodes.map(function (n) {
     var c = n.callee;
       var code = src.slice(c.range[0], c.range[1]).replace(regex, toName);
-      return { from: c.range[0], to: c.range[1], code: code };
+      return { start: c.range[0], end: c.range[1], replacement: code };
   });
 }
 
@@ -50,17 +51,5 @@ function rename(fromName, toName, origSrc) {
   if (hb) src = src.slice(hbs.length);
   
   var offset = 0;
-  return hbs + getReplacements(fromName, toName, src)
-    .sort(rangeComparator)
-    .reduce(function(acc, replacement) {
-      var from = replacement.from + offset
-        , to   = replacement.to + offset
-        , code = replacement.code;
-
-      // all ranges will be invalidated since we are changing the code
-      // therefore keep track of the offset to adjust them in case we replace multiple requires
-      var diff = code.length - (to - from);
-      offset += diff;
-      return acc.slice(0, from) + code + acc.slice(to);
-    }, src);
+  return hbs + patch(src, getReplacements(fromName, toName, src).sort(rangeComparator));
 }
